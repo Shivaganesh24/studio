@@ -42,6 +42,12 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+} from '@/components/ui/chart';
+import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 
 
 // Mock stock data
@@ -464,6 +470,45 @@ export default function SandboxPage() {
             <CardContent>
                 {selectedStock ? (
                 <div className="h-80 w-full">
+                  <ChartContainer config={chartConfig}>
+                    <AreaChart
+                      accessibilityLayer
+                      data={selectedStock.chart}
+                      margin={{
+                        left: -20,
+                        right: 20,
+                        top: 5,
+                        bottom: 0,
+                      }}
+                    >
+                      <CartesianGrid vertical={false} />
+                      <XAxis
+                        dataKey="date"
+                        tickLine={false}
+                        axisLine={false}
+                        tickMargin={8}
+                      />
+                      <YAxis
+                        tickLine={false}
+                        axisLine={false}
+                        tickMargin={8}
+                        domain={['dataMin - 20', 'dataMax + 20']}
+                        tickFormatter={(value) => `₹${value}`}
+                      />
+                      <ChartTooltip
+                        cursor={false}
+                        content={<ChartTooltipContent indicator="dot" formatter={(value) => `₹${Number(value).toLocaleString()}`} />}
+                      />
+                      <Area
+                        dataKey="value"
+                        type="natural"
+                        fill="var(--color-value)"
+                        fillOpacity={0.2}
+                        stroke="var(--color-value)"
+                        strokeWidth={2}
+                      />
+                    </AreaChart>
+                  </ChartContainer>
                 </div>
                 ) : (
                     <div className='h-80 flex flex-col items-center justify-center text-center text-muted-foreground bg-secondary/50 rounded-lg'>
@@ -479,3 +524,5 @@ export default function SandboxPage() {
     </MainLayout>
   );
 }
+
+    

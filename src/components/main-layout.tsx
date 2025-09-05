@@ -11,6 +11,8 @@ import {
   User,
   TrendingUp,
   Languages,
+  Moon,
+  Sun,
 } from 'lucide-react';
 import {
   SidebarProvider,
@@ -34,6 +36,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Separator } from './ui/separator';
+import { useTheme } from 'next-themes';
 
 const navItems = [
   { href: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -45,6 +48,7 @@ const navItems = [
 
 export default function MainLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const { setTheme } = useTheme();
 
   return (
     <SidebarProvider>
@@ -96,6 +100,26 @@ export default function MainLayout({ children }: { children: ReactNode }) {
             <div className="flex-1">
               {/* Optional: Add a search bar here later */}
             </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon">
+                  <Sun className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+                  <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+                  <span className="sr-only">Toggle theme</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setTheme('light')}>
+                  Light
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTheme('dark')}>
+                  Dark
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTheme('system')}>
+                  System
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="icon">

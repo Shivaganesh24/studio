@@ -12,7 +12,8 @@ import {
   TrendingUp,
   TrendingDown,
   Activity,
-  PlayCircle,
+  Search,
+  LineChart
 } from 'lucide-react';
 import {
   Table,
@@ -22,36 +23,15 @@ import {
   TableBody,
   TableCell,
 } from '@/components/ui/table';
-import Image from 'next/image';
-import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+} from '@/components/ui/chart';
+import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 
-const videoTutorials = [
-  {
-    id: 1,
-    title: 'How to Place Your First Virtual Trade',
-    duration: '5:42',
-    thumbnail: 'https://picsum.photos/400/225',
-    href: '#',
-    dataAiHint: 'trading tutorial',
-  },
-  {
-    id: 2,
-    title: 'Understanding Market Orders vs. Limit Orders',
-    duration: '7:15',
-    thumbnail: 'https://picsum.photos/400/225',
-    href: '#',
-    dataAiHint: 'stock market',
-  },
-  {
-    id: 3,
-    title: 'Basic Chart Analysis for Beginners',
-    duration: '10:30',
-    thumbnail: 'https://picsum.photos/400/225',
-    href: '#',
-    dataAiHint: 'financial chart',
-  },
-];
 
 const transactions = [
   {
@@ -83,6 +63,24 @@ const transactions = [
     date: '2024-07-26',
   },
 ];
+
+const chartData = [
+  { date: '24-07', value: 1640 },
+  { date: '25-07', value: 1645 },
+  { date: '26-07', value: 1650 },
+  { date: '27-07', value: 1670 },
+  { date: '28-07', value: 1665 },
+  { date: '29-07', value: 1680 },
+  { date: '30-07', value: 1690 },
+];
+
+const chartConfig = {
+  value: {
+    label: 'Price',
+    color: 'hsl(var(--primary))',
+  },
+};
+
 
 export default function SandboxPage() {
   return (
@@ -158,109 +156,127 @@ export default function SandboxPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Card className="lg:col-span-2">
+          <div className="lg:col-span-2 space-y-6">
+             <Card>
+              <CardHeader>
+                <CardTitle>Simulate a Trade</CardTitle>
+                 <CardDescription>
+                  Search for a stock and decide your next move.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col sm:flex-row items-center gap-4">
+                 <div className="relative flex-grow w-full">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                    <Input placeholder="Search for a stock (e.g., INFY, SBIN)" className="pl-10" />
+                 </div>
+                <div className='flex gap-2 w-full sm:w-auto'>
+                   <Button className="flex-1">
+                    <TrendingUp className="mr-2 h-5 w-5" /> Buy
+                  </Button>
+                  <Button variant="destructive" className="flex-1">
+                    <TrendingDown className="mr-2 h-5 w-5" /> Sell
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent Transactions</CardTitle>
+                <CardDescription>
+                  Your last 4 virtual transactions.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Stock</TableHead>
+                      <TableHead className="text-right">Quantity</TableHead>
+                      <TableHead className="text-right">Price</TableHead>
+                      <TableHead>Date</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {transactions.map((tx, i) => (
+                      <TableRow key={i}>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              tx.type === 'Buy' ? 'default' : 'destructive'
+                            }
+                            className={
+                              tx.type === 'Buy'
+                                ? 'bg-green-500/20 text-green-700 hover:bg-green-500/30'
+                                : 'bg-red-500/20 text-red-700 hover:bg-red-500/30'
+                            }
+                          >
+                            {tx.type}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-medium">{tx.stock}</TableCell>
+                        <TableCell className="text-right">
+                          {tx.quantity}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          ₹{tx.price.toFixed(2)}
+                        </TableCell>
+                        <TableCell>{tx.date}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </div>
+          <Card className="lg:col-span-1">
             <CardHeader>
-              <CardTitle>Recent Transactions</CardTitle>
+              <CardTitle>INFY Mock Performance</CardTitle>
               <CardDescription>
-                Your last 4 virtual transactions.
+                7-day virtual performance data.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Stock</TableHead>
-                    <TableHead className="text-right">Quantity</TableHead>
-                    <TableHead className="text-right">Price</TableHead>
-                    <TableHead>Date</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {transactions.map((tx, i) => (
-                    <TableRow key={i}>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            tx.type === 'Buy' ? 'default' : 'destructive'
-                          }
-                          className={
-                            tx.type === 'Buy'
-                              ? 'bg-green-500/20 text-green-700 hover:bg-green-500/30'
-                              : 'bg-red-500/20 text-red-700 hover:bg-red-500/30'
-                          }
-                        >
-                          {tx.type}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="font-medium">{tx.stock}</TableCell>
-                      <TableCell className="text-right">
-                        {tx.quantity}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        ₹{tx.price.toFixed(2)}
-                      </TableCell>
-                      <TableCell>{tx.date}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>Quick Actions</CardTitle>
-              <CardDescription>
-                Simulate your next market move.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <Button size="lg">
-                <TrendingUp className="mr-2 h-5 w-5" /> Buy a Stock
-              </Button>
-              <Button size="lg" variant="destructive">
-                <TrendingDown className="mr-2 h-5 w-5" /> Sell a Stock
-              </Button>
-              <Button size="lg" variant="secondary">
-                View My Virtual Holdings
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div>
-          <h3 className="text-2xl font-bold tracking-tight mb-4">
-            Video Tutorials
-          </h3>
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {videoTutorials.map((video) => (
-              <Link href={video.href} key={video.id}>
-                <Card className="overflow-hidden group hover:shadow-xl transition-shadow">
-                  <div className="relative">
-                    <Image
-                      src={video.thumbnail}
-                      alt={video.title}
-                      width={400}
-                      height={225}
-                      className="object-cover w-full aspect-video"
-                      data-ai-hint={video.dataAiHint}
+                <ChartContainer config={chartConfig} className="h-64 w-full">
+                  <AreaChart
+                    accessibilityLayer
+                    data={chartData}
+                    margin={{
+                      left: -10,
+                      right: 10,
+                      top: 5,
+                      bottom: 0,
+                    }}
+                  >
+                    <CartesianGrid vertical={false} />
+                    <XAxis
+                      dataKey="date"
+                      tickLine={false}
+                      axisLine={false}
+                      tickMargin={8}
                     />
-                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                      <PlayCircle className="w-16 h-16 text-white" />
-                    </div>
-                  </div>
-                  <CardContent className="p-4">
-                    <h4 className="font-semibold text-base mb-1">
-                      {video.title}
-                    </h4>
-                    <p className="text-sm text-muted-foreground">
-                      Duration: {video.duration}
-                    </p>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
-          </div>
+                    <YAxis
+                      tickLine={false}
+                      axisLine={false}
+                      tickMargin={8}
+                      domain={['dataMin - 10', 'dataMax + 10']}
+                    />
+                    <ChartTooltip
+                      cursor={false}
+                      content={<ChartTooltipContent indicator="dot" />}
+                    />
+                    <Area
+                      dataKey="value"
+                      type="natural"
+                      fill="var(--color-value)"
+                      fillOpacity={0.2}
+                      stroke="var(--color-value)"
+                      strokeWidth={2}
+                    />
+                  </AreaChart>
+                </ChartContainer>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </MainLayout>

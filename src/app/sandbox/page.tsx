@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import MainLayout from '@/components/main-layout';
 import {
   Card,
@@ -16,7 +16,9 @@ import {
   TrendingDown,
   Activity,
   Search,
-  AlertCircle
+  AlertCircle,
+  PlusCircle,
+  MinusCircle
 } from 'lucide-react';
 import {
   Table,
@@ -28,12 +30,6 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-} from '@/components/ui/chart';
-import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 import {
   Dialog,
   DialogContent,
@@ -65,24 +61,42 @@ const chartConfig = {
   },
 };
 
+type Holding = {
+  ticker: string;
+  quantity: number;
+  avgPrice: number;
+};
+
 
 export default function SandboxPage() {
     const { toast } = useToast();
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedStock, setSelectedStock] = useState<{ ticker: string, price: number, name: string, chart: any[] } | null>(null);
     const [quantity, setQuantity] = useState(1);
-
-    const [portfolioValue, setPortfolioValue] = useState(105234.50);
+    
+    const [holdings, setHoldings] = useState<Holding[]>([
+        { ticker: 'INFY', quantity: 20, avgPrice: 1650.0 },
+        { ticker: 'HDFCBANK', quantity: 15, avgPrice: 1670.5 },
+    ]);
     const [availableFunds, setAvailableFunds] = useState(24200.75);
     const [transactions, setTransactions] = useState([
         { type: 'Buy', stock: 'INFY', quantity: 20, price: 1650.0, date: '2024-07-26' },
         { type: 'Buy', stock: 'HDFCBANK', quantity: 15, price: 1670.5, date: '2024-07-27' },
     ]);
 
+    const portfolioValue = useMemo(() => {
+        return holdings.reduce((total, holding) => {
+            const currentPrice = mockStockData[holding.ticker]?.price || holding.avgPrice;
+            return total + (holding.quantity * currentPrice);
+        }, 0);
+    }, [holdings]);
+
+
     const handleSearch = () => {
-        const stock = mockStockData[searchTerm.toUpperCase()];
+        const stockTicker = searchTerm.toUpperCase();
+        const stock = mockStockData[stockTicker];
         if (stock) {
-            setSelectedStock({ ticker: searchTerm.toUpperCase(), ...stock });
+            setSelectedStock({ ticker: stockTicker, ...stock });
         } else {
             setSelectedStock(null);
             toast({
@@ -93,44 +107,69 @@ export default function SandboxPage() {
         }
     };
 
-    const handleTrade = (type: 'Buy' | 'Sell') => {
-        if (!selectedStock || quantity <= 0) return;
+    const handleTrade = (type: 'Buy' | 'Sell', ticker: string, tradeQuantity: number) => {
+        const stockData = mockStockData[ticker];
+        if (!stockData || tradeQuantity <= 0) return;
 
-        const tradeValue = selectedStock.price * quantity;
+        const tradeValue = stockData.price * tradeQuantity;
 
-        if (type === 'Buy' && tradeValue > availableFunds) {
-            toast({
-                variant: 'destructive',
-                title: 'Insufficient Funds',
-                description: `You need ₹${tradeValue.toFixed(2)} to buy ${quantity} share(s) of ${selectedStock.ticker}.`,
+        if (type === 'Buy') {
+            if (tradeValue > availableFunds) {
+                toast({
+                    variant: 'destructive',
+                    title: 'Insufficient Funds',
+                    description: `You need ₹${tradeValue.toFixed(2)} to buy ${tradeQuantity} share(s) of ${ticker}.`,
+                });
+                return;
+            }
+            
+            setAvailableFunds(availableFunds - tradeValue);
+            setHoldings(prev => {
+                const existingHolding = prev.find(h => h.ticker === ticker);
+                if (existingHolding) {
+                    const totalQuantity = existingHolding.quantity + tradeQuantity;
+                    const newAvgPrice = ((existingHolding.avgPrice * existingHolding.quantity) + tradeValue) / totalQuantity;
+                    return prev.map(h => h.ticker === ticker ? { ...h, quantity: totalQuantity, avgPrice: newAvgPrice } : h);
+                } else {
+                    return [...prev, { ticker, quantity: tradeQuantity, avgPrice: stockData.price }];
+                }
             });
-            return;
+
+        } else { // Sell
+            const holding = holdings.find(h => h.ticker === ticker);
+            if (!holding || tradeQuantity > holding.quantity) {
+                 toast({
+                    variant: 'destructive',
+                    title: 'Not enough shares',
+                    description: `You can't sell more shares of ${ticker} than you own.`,
+                });
+                return;
+            }
+            
+            setAvailableFunds(availableFunds + tradeValue);
+            setHoldings(prev => {
+                const newQuantity = holding.quantity - tradeQuantity;
+                if (newQuantity === 0) {
+                    return prev.filter(h => h.ticker !== ticker);
+                } else {
+                    return prev.map(h => h.ticker === ticker ? { ...h, quantity: newQuantity } : h);
+                }
+            });
         }
         
-        // In a real app, you'd also check if the user owns enough stock to sell.
-        // For this demo, we will allow it.
-
         const newTransaction = {
             type,
-            stock: selectedStock.ticker,
-            quantity,
-            price: selectedStock.price,
+            stock: ticker,
+            quantity: tradeQuantity,
+            price: stockData.price,
             date: new Date().toISOString().split('T')[0],
         };
 
         setTransactions([newTransaction, ...transactions]);
-        
-        if (type === 'Buy') {
-            setAvailableFunds(availableFunds - tradeValue);
-            setPortfolioValue(portfolioValue + tradeValue);
-        } else {
-            setAvailableFunds(availableFunds + tradeValue);
-            setPortfolioValue(portfolioValue - tradeValue);
-        }
 
         toast({
             title: `Trade Successful`,
-            description: `You have successfully ${type === 'Buy' ? 'bought' : 'sold'} ${quantity} share(s) of ${selectedStock.ticker}.`,
+            description: `You have successfully ${type === 'Buy' ? 'bought' : 'sold'} ${tradeQuantity} share(s) of ${ticker}.`,
         });
         
         setQuantity(1); // Reset quantity
@@ -160,7 +199,7 @@ export default function SandboxPage() {
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">₹{portfolioValue.toLocaleString('en-IN')}</div>
+              <div className="text-2xl font-bold">₹{portfolioValue.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
               <p className="text-xs text-muted-foreground">
                 Based on your virtual holdings
               </p>
@@ -174,7 +213,7 @@ export default function SandboxPage() {
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">₹{availableFunds.toLocaleString('en-IN')}</div>
+              <div className="text-2xl font-bold">₹{availableFunds.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
               <p className="text-xs text-muted-foreground">
                 Ready to be invested
               </p>
@@ -208,20 +247,20 @@ export default function SandboxPage() {
           </Card>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+          <div className="lg:col-span-3 space-y-6">
              <Card>
               <CardHeader>
                 <CardTitle>Simulate a Trade</CardTitle>
                  <CardDescription>
-                  Search for a stock ticker and decide your next move.
+                  Search for a stock to buy and add to your portfolio.
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col sm:flex-row items-center gap-4">
                  <div className="relative flex-grow w-full">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                     <Input 
-                        placeholder="Search for a stock (e.g., INFY, SBIN)" 
+                        placeholder="Search for a stock to buy (e.g., INFY, SBIN)" 
                         className="pl-10" 
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
@@ -229,7 +268,7 @@ export default function SandboxPage() {
                     />
                  </div>
                  <Button onClick={handleSearch} className='w-full sm:w-auto'>
-                    Search
+                    Search Stock
                  </Button>
               </CardContent>
               {selectedStock && (
@@ -238,75 +277,129 @@ export default function SandboxPage() {
                         <h3 className='font-bold text-lg'>{selectedStock.ticker} - {selectedStock.name}</h3>
                         <p className='text-2xl font-bold'>₹{selectedStock.price.toFixed(2)}</p>
                     </div>
-                    <div className='flex gap-2 w-full sm:w-auto'>
-                        <Dialog>
-                            <DialogTrigger asChild>
-                                <Button className="flex-1">
-                                    <TrendingUp className="mr-2 h-5 w-5" /> Buy
-                                </Button>
-                            </DialogTrigger>
-                            <DialogContent>
-                                <DialogHeader>
-                                    <DialogTitle>Buy {selectedStock.ticker}</DialogTitle>
-                                    <DialogDescription>
-                                        Current Price: ₹{selectedStock.price.toFixed(2)}. Total Cost: ₹{(selectedStock.price * quantity).toFixed(2)}
-                                    </DialogDescription>
-                                </DialogHeader>
-                                <div className="grid gap-4 py-4">
-                                    <div className="grid grid-cols-4 items-center gap-4">
-                                        <Label htmlFor="quantity" className="text-right">Quantity</Label>
-                                        <Input
-                                            id="quantity"
-                                            type="number"
-                                            value={quantity}
-                                            onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                                            className="col-span-3"
-                                        />
-                                    </div>
+                    <Dialog>
+                        <DialogTrigger asChild>
+                            <Button>
+                                <TrendingUp className="mr-2 h-5 w-5" /> Buy
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                            <DialogHeader>
+                                <DialogTitle>Buy {selectedStock.ticker}</DialogTitle>
+                                <DialogDescription>
+                                    Current Price: ₹{selectedStock.price.toFixed(2)}. Available Funds: ₹{availableFunds.toFixed(2)}
+                                </DialogDescription>
+                            </DialogHeader>
+                            <div className="grid gap-4 py-4">
+                                <div className="grid grid-cols-4 items-center gap-4">
+                                    <Label htmlFor="quantity" className="text-right">Quantity</Label>
+                                    <Input
+                                        id="quantity"
+                                        type="number"
+                                        value={quantity}
+                                        onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                                        className="col-span-3"
+                                    />
                                 </div>
-                                <DialogFooter>
-                                    <DialogClose asChild>
-                                        <Button type="button" onClick={() => handleTrade('Buy')}>Confirm Purchase</Button>
-                                    </DialogClose>
-                                </DialogFooter>
-                            </DialogContent>
-                        </Dialog>
-                        <Dialog>
-                            <DialogTrigger asChild>
-                                <Button variant="destructive" className="flex-1">
-                                    <TrendingDown className="mr-2 h-5 w-5" /> Sell
-                                </Button>
-                            </DialogTrigger>
-                             <DialogContent>
-                                <DialogHeader>
-                                    <DialogTitle>Sell {selectedStock.ticker}</DialogTitle>
-                                    <DialogDescription>
-                                        Current Price: ₹{selectedStock.price.toFixed(2)}. Total Value: ₹{(selectedStock.price * quantity).toFixed(2)}
-                                    </DialogDescription>
-                                </DialogHeader>
-                                <div className="grid gap-4 py-4">
-                                    <div className="grid grid-cols-4 items-center gap-4">
-                                        <Label htmlFor="quantity-sell" className="text-right">Quantity</Label>
-                                        <Input
-                                            id="quantity-sell"
-                                            type="number"
-                                            value={quantity}
-                                            onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                                            className="col-span-3"
-                                        />
-                                    </div>
+                                <div className='text-center font-bold text-lg'>
+                                    Total Cost: ₹{(selectedStock.price * quantity).toFixed(2)}
                                 </div>
-                                <DialogFooter>
-                                    <DialogClose asChild>
-                                        <Button type="button" onClick={() => handleTrade('Sell')}>Confirm Sale</Button>
-                                    </DialogClose>
-                                </DialogFooter>
-                            </DialogContent>
-                        </Dialog>
-                    </div>
+                            </div>
+                            <DialogFooter>
+                                <DialogClose asChild>
+                                    <Button type="button" onClick={() => handleTrade('Buy', selectedStock.ticker, quantity)}>Confirm Purchase</Button>
+                                </DialogClose>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
                 </CardFooter>
               )}
             </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>Your Holdings</CardTitle>
+                    <CardDescription>
+                    All the stocks you currently own in your virtual portfolio.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Table>
+                    <TableHeader>
+                        <TableRow>
+                        <TableHead>Stock</TableHead>
+                        <TableHead>Quantity</TableHead>
+                        <TableHead>Avg. Price</TableHead>
+                        <TableHead>Current Price</TableHead>
+                        <TableHead>Market Value</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {holdings.length > 0 ? holdings.map((holding) => {
+                            const stockData = mockStockData[holding.ticker];
+                            const marketValue = stockData.price * holding.quantity;
+                            return (
+                                <TableRow key={holding.ticker}>
+                                    <TableCell className="font-medium">{holding.ticker}</TableCell>
+                                    <TableCell>{holding.quantity}</TableCell>
+                                    <TableCell>₹{holding.avgPrice.toFixed(2)}</TableCell>
+                                    <TableCell>₹{stockData.price.toFixed(2)}</TableCell>
+                                    <TableCell>₹{marketValue.toFixed(2)}</TableCell>
+                                    <TableCell className="text-right space-x-2">
+                                        <Dialog>
+                                            <DialogTrigger asChild>
+                                                <Button size="icon" variant="outline" className='text-green-600 hover:text-green-600 hover:bg-green-500/10 border-green-600/50 hover:border-green-600'><PlusCircle className="h-4 w-4" /></Button>
+                                            </DialogTrigger>
+                                            <DialogContent>
+                                                <DialogHeader>
+                                                    <DialogTitle>Buy more {holding.ticker}</DialogTitle>
+                                                </DialogHeader>
+                                                <div className="grid gap-4 py-4">
+                                                    <div className="grid grid-cols-4 items-center gap-4">
+                                                        <Label htmlFor={`quantity-buy-${holding.ticker}`} className="text-right">Quantity</Label>
+                                                        <Input id={`quantity-buy-${holding.ticker}`} type="number" defaultValue={1} min={1} className="col-span-3" onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}/>
+                                                    </div>
+                                                </div>
+                                                <DialogFooter>
+                                                    <DialogClose asChild><Button type="button" onClick={() => handleTrade('Buy', holding.ticker, quantity)}>Confirm Purchase</Button></DialogClose>
+                                                </DialogFooter>
+                                            </DialogContent>
+                                        </Dialog>
+                                        <Dialog>
+                                            <DialogTrigger asChild>
+                                                <Button size="icon" variant="outline" className='text-red-600 hover:text-red-600 hover:bg-red-500/10 border-red-600/50 hover:border-red-600'><MinusCircle className="h-4 w-4" /></Button>
+                                            </DialogTrigger>
+                                            <DialogContent>
+                                                <DialogHeader>
+                                                    <DialogTitle>Sell {holding.ticker}</DialogTitle>
+                                                </DialogHeader>
+                                                 <div className="grid gap-4 py-4">
+                                                    <div className="grid grid-cols-4 items-center gap-4">
+                                                        <Label htmlFor={`quantity-sell-${holding.ticker}`} className="text-right">Quantity</Label>
+                                                        <Input id={`quantity-sell-${holding.ticker}`} type="number" defaultValue={1} min={1} max={holding.quantity} className="col-span-3" onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}/>
+                                                    </div>
+                                                </div>
+                                                <DialogFooter>
+                                                    <DialogClose asChild><Button variant="destructive" type="button" onClick={() => handleTrade('Sell', holding.ticker, quantity)}>Confirm Sale</Button></DialogClose>
+                                                </DialogFooter>
+                                            </DialogContent>
+                                        </Dialog>
+                                    </TableCell>
+                                </TableRow>
+                            );
+                        }) : (
+                        <TableRow>
+                            <TableCell colSpan={6} className="text-center text-muted-foreground">
+                                You don't own any stocks yet. Use the search above to buy some!
+                            </TableCell>
+                        </TableRow>
+                        )}
+                    </TableBody>
+                    </Table>
+                </CardContent>
+            </Card>
+
             <Card>
               <CardHeader>
                 <CardTitle>Recent Transactions</CardTitle>
@@ -326,18 +419,16 @@ export default function SandboxPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {transactions.length > 0 ? transactions.map((tx, i) => (
+                    {transactions.length > 0 ? transactions.slice(0, 5).map((tx, i) => (
                       <TableRow key={i}>
                         <TableCell>
                           <Badge
-                            variant={
-                              tx.type === 'Buy' ? 'default' : 'destructive'
-                            }
                             className={
                               tx.type === 'Buy'
-                                ? 'bg-green-500/20 text-green-700 hover:bg-green-500/30'
-                                : 'bg-red-500/20 text-red-700 hover:bg-red-500/30'
+                                ? 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/50 dark:text-green-300 dark:border-green-700'
+                                : 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/50 dark:text-red-300 dark:border-red-700'
                             }
+                            variant="outline"
                           >
                             {tx.type}
                           </Badge>
@@ -363,7 +454,7 @@ export default function SandboxPage() {
               </CardContent>
             </Card>
           </div>
-          <Card className="lg:col-span-1">
+          <Card className="lg:col-span-2">
             <CardHeader>
               <CardTitle>{selectedStock ? `${selectedStock.ticker} Performance` : "Stock Performance"}</CardTitle>
               <CardDescription>
@@ -372,46 +463,10 @@ export default function SandboxPage() {
             </CardHeader>
             <CardContent>
                 {selectedStock ? (
-                <ChartContainer config={chartConfig} className="h-64 w-full">
-                  <AreaChart
-                    accessibilityLayer
-                    data={selectedStock.chart}
-                    margin={{
-                      left: -10,
-                      right: 10,
-                      top: 5,
-                      bottom: 0,
-                    }}
-                  >
-                    <CartesianGrid vertical={false} />
-                    <XAxis
-                      dataKey="date"
-                      tickLine={false}
-                      axisLine={false}
-                      tickMargin={8}
-                    />
-                    <YAxis
-                      tickLine={false}
-                      axisLine={false}
-                      tickMargin={8}
-                      domain={['dataMin - 10', 'dataMax + 10']}
-                    />
-                    <ChartTooltip
-                      cursor={false}
-                      content={<ChartTooltipContent indicator="dot" />}
-                    />
-                    <Area
-                      dataKey="value"
-                      type="natural"
-                      fill="var(--color-value)"
-                      fillOpacity={0.2}
-                      stroke="var(--color-value)"
-                      strokeWidth={2}
-                    />
-                  </AreaChart>
-                </ChartContainer>
+                <div className="h-80 w-full">
+                </div>
                 ) : (
-                    <div className='h-64 flex flex-col items-center justify-center text-center text-muted-foreground bg-secondary/50 rounded-lg'>
+                    <div className='h-80 flex flex-col items-center justify-center text-center text-muted-foreground bg-secondary/50 rounded-lg'>
                         <AlertCircle className='w-10 h-10 mb-4' />
                         <p>No stock selected.</p>
                         <p className='text-xs'>Use the search bar to find a stock.</p>
@@ -423,3 +478,4 @@ export default function SandboxPage() {
       </div>
     </MainLayout>
   );
+}
